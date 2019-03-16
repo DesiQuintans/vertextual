@@ -2,8 +2,6 @@
 # Set up packages and internal data ---------------------------------------
 
 library(shiny)
-library(readr)
-library(tidyr)
 library(dplyr)
 library(igraph)
 
@@ -137,11 +135,12 @@ server <- function(input, output) {
     build_graph_df <- function(lines) {
         suppressWarnings(
             df <- 
-                read_delim(lines, delim = ">", trim_ws = TRUE,
-                           col_names = c("from", "to")) %>% 
+                read.table(text = lines, sep = ">", strip.white = TRUE,
+                           col.names = c("from", "to"), na.strings = "", 
+                           stringsAsFactors = FALSE) %>% 
                 mutate(to   = ifelse(is.na(to),   lead(from), to),
                        from = ifelse(is.na(from), lag(to),    from)) %>% 
-                drop_na() %>% 
+                na.omit() %>% 
                 distinct()
         )
     }
