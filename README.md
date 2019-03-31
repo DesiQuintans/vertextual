@@ -30,6 +30,18 @@ Is identical to:
     Idea > Sketch
     Sketch > Prototype
     
+You can also reuse the last `Origin` as the new `Origin` with the operator `^`:
+                    
+    Daydream > Idea
+    ^ Sketch
+    ^ Prototype
+    
+Is identical to:
+
+    Daydream > Idea
+    Daydream > Sketch
+    Daydream > Prototype
+    
 Circular networks can be made by looping back to an already-existing node. Bi-directional edges and even self-loops can be made too.
 
     # A bi-directional loop
@@ -43,4 +55,4 @@ You can name connections in any order. Duplicate connections will be automatical
 
 ---
 
-Written in [R Shiny](https://shiny.rstudio.com/) by Desi Quintans, 2019-03-16.
+Written in [R Shiny](https://shiny.rstudio.com/) by Desi Quintans, project began on 2019-03-16.
