@@ -5,7 +5,7 @@ library(shiny)
 library(dplyr)
 library(igraph)
 
-default_connections <- "Daydream > Daydream\nDaydream > Idea\n> Sketch\n> Prototype\n> Test\n> Evaluate\n> Refine\n> Sketch\nRefine > Polish\n> Refine\nPolish > Ship it!\n> Daydream"
+default_connections <- "Daydream > Daydream\nDaydream > Idea\n> Sketch\n> Prototype\n> Test\n> Evaluate\n> Refine\n> Sketch\n^ Polish\n> Refine\n^ Ship it!\n> Daydream"
 
 
 # Draw the Shiny app ------------------------------------------------------
@@ -86,9 +86,18 @@ fluidPage(
                       you can reuse the last", code("Destination"), "node as 
                       the new", code("Origin"), "by omitting the", 
                       code("Origin"), "from the new definition:"),
-                    pre("Daydream > Idea\nIdea > Sketch\nSketch > Prototype"),
-                    p("Is identical to"),
+                    
                     pre("Daydream > Idea\n> Sketch\n> Prototype"),
+                    p("Is identical to"),
+                    pre("Daydream > Idea\nIdea > Sketch\nSketch > Prototype"),
+                    
+                    p("You can also reuse the last", code("Origin"), "as the 
+                      new", code("Origin"), "with the operator", code("^"), ":"),
+                    
+                    pre("Daydream > Idea\n^ Sketch\n^ Prototype"),
+                    p("Is identical to"),
+                    pre("Daydream > Idea\nDaydream > Sketch\nDaydream > Prototype"),
+                    
                     p("Circular networks can be made by looping back to an 
                     already-existing node. Bi-directional edges and even 
                       self-loops can be made too."),
@@ -134,13 +143,26 @@ server <- function(input, output) {
     # Build a dataframe from the user's text input.
     build_graph_df <- function(lines) {
         suppressWarnings(
-            df <- 
-                read.table(text = lines, sep = ">", strip.white = TRUE,
-                           col.names = c("from", "to"), na.strings = "", 
+            df <-
+                # Text input as one column, with one line per row.
+                read.delim(text = lines, sep = "\n", header = FALSE, 
                            stringsAsFactors = FALSE) %>% 
-                mutate(to   = ifelse(is.na(to),   lead(from), to),
-                       from = ifelse(is.na(from), lag(to),    from)) %>% 
-                na.omit() %>% 
+                # Split the column into 3 parts.
+                tidyr::extract(1, 
+                               into = c("from", "action", "to"), 
+                               regex = "^(.*?)\\s{0,}(>|\\^)\\s{0,}(.*?)$") %>% 
+                # Replace empty cells with NAs for filling
+                mutate_at(vars(from, to), ~ ifelse(nchar(.) == 0, NA_character_, .)) %>%
+                # These next steps cannot be done in a case_when() because the ^ action 
+                # will not be properly applied.
+                # 1. First try to fill any empty 'to' fields.
+                # 2. Fill > operator (use last destination).
+                # 3. Fill ^ operator (use last origin).
+                mutate(to   = ifelse(is.na(to), from, to)) %>% 
+                mutate(from = ifelse(is.na(from) & action == ">", lag(to), from)) %>% 
+                fill(from, .direction = "down") %>% 
+                select(from, to) %>% 
+                na.omit() %>%
                 distinct()
         )
     }
