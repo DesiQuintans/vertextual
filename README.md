@@ -42,16 +42,7 @@ Is identical to:
     Daydream > Sketch
     Daydream > Prototype
     
-Circular networks can be made by looping back to an already-existing node. Bi-directional edges and even self-loops can be made too.
-
-    # A bi-directional loop
-    Polish > Refine
-    > Polish
-
-    # A self-loop
-    Daydream > Daydream
-    
-You can name connections in any order. Duplicate connections will be automatically removed.
+You can name connections in any order. Duplicate connections and self-loops will be automatically removed.
 
 ---
 

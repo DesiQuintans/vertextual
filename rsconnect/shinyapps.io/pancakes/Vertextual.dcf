@@ -5,8 +5,8 @@ account: pancakes
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 792287
-bundleId: 1943958
+bundleId: 1991995
 url: https://pancakes.shinyapps.io/Vertextual/
-when: 1552712934.6019
+when: 1554602439.96574
 asMultiple: FALSE
 asStatic: FALSE

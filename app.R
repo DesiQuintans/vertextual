@@ -2,10 +2,12 @@
 # Set up packages and internal data ---------------------------------------
 
 library(shiny)
+library(tidyr)
 library(dplyr)
 library(igraph)
+library(networkD3)
 
-default_connections <- "Daydream > Daydream\nDaydream > Idea\n> Sketch\n> Prototype\n> Test\n> Evaluate\n> Refine\n> Sketch\n^ Polish\n> Refine\n^ Ship it!\n> Daydream"
+default_connections <- "Sean > Steven\n^ Connor\n^ Samara\nSean > Majdi\n> Preston\n> Porscha\n> Sean\nMajdi > Madeeha\nPorscha > Erick\n> Marrissa"
 
 
 # Draw the Shiny app ------------------------------------------------------
@@ -24,9 +26,6 @@ fluidPage(
             tabsetPanel(type = "tabs",
                 tabPanel("Nodes and edges",
                     br(),
-                    textInput("title",
-                              "Network title",
-                              value = "The software development process"),
                     textAreaInput("user_edges",
                                   "Nodes and edges",
                                   width = "100%",
@@ -39,40 +38,19 @@ fluidPage(
                     h3("Node appearance"),
                     fluidRow(
                         column(width = 6,
-                            sliderInput("vert_size", "Node size",
-                                        min = 0, max = 50, step = 1, value = 40),
-                            selectInput("vert_shape", "Node shape", 
-                                        c("rectangle", "circle", "square", "none"))
+                               sliderInput("label_size", "Label size", 
+                                           min = 8, max = 48, step = 1, value = 24)
                         ),
                         
                         column(width = 6,
-                            sliderInput("label_size", "Label size", 
-                                        min = 1, max = 5, step = 0.5, value = 1.5),
-                            br(),
-                            checkboxInput("root_only", 
-                                          "Display the shape for the first node only", 
-                                          value = TRUE)
+                               sliderInput("node_dist", "Node distance", 
+                                           min = 0, max = 200, step = 5, value = 75)
                         )
                     ),
                     
-                    br(),
-                    
                     h3("Edge appearance"),
-                    fluidRow(
-                        column(width = 6,
-                            sliderInput("edge_thick", "Line thickness", 
-                                        min = 1, max = 5, step = 0.5, value = 1.5),
-                            selectInput("edge_shape", "Line type", 
-                                        c("solid", "dashed", "dotted", "none" = "blank"))
-                        ),
-                        
-                        column(width = 6,
-                            sliderInput("arrw_thick", "Arrow size",
-                                        min = 0, max = 5, step = 0.5, value = 1),
-                            sliderInput("edge_curve", "Line curviness",
-                                        min = 0, max = 1, step = 0.10, value = 0.1)
-                        )
-                    )
+                    sliderInput("edge_thick", "Line thickness", 
+                                min = 1, max = 10, step = 1, value = 2)
                 ),
                 tabPanel("Help",
                     h3("Building networks from text"),
@@ -97,24 +75,14 @@ fluidPage(
                     pre("Daydream > Idea\n^ Sketch\n^ Prototype"),
                     p("Is identical to"),
                     pre("Daydream > Idea\nDaydream > Sketch\nDaydream > Prototype"),
-                    
-                    p("Circular networks can be made by looping back to an 
-                    already-existing node. Bi-directional edges and even 
-                      self-loops can be made too."),
-                    pre("# A bi-directional loop\nPolish > Refine\n> Polish"),
-                    pre("# A self-loop\nDaydream > Daydream"),
                     p("You can name connections in any order. Duplicate 
-                      connections will be automatically removed.")
+                      connections and self-loops will be automatically removed.")
                 )
             )
         ),
         
-        # Show a plot of the generated distribution
         mainPanel(width = 9,
-            tabsetPanel(type = "tabs",
-                tabPanel("Graph", plotOutput("network", height = "800px")),
-                tabPanel("Dataframe", verbatimTextOutput("code"))
-            )
+                  simpleNetworkOutput("network", height = "800px")
         )
     )
 )
@@ -167,68 +135,59 @@ server <- function(input, output) {
         )
     }
     
-    # Plot a graph
-    plot_graph <- function(lines) {
-        graph <- graph_from_data_frame(build_graph_df(lines))
-        graph_layout <- layout_with_kk(graph)
+    # Plot a graph with networkD3
+    # http://www.r-graph-gallery.com/87-interactive-network-with-networkd3-package/
+    plot_nd3 <- function(lines) {
+        
+        # Create dataframes for network graph
+        edges <- 
+            build_graph_df(lines) %>% 
+            rename(origin = from, target = to)
+        
+        nodes <- 
+            tibble(label = unique(unlist(edges))) %>% 
+            mutate(id = row_number())
+        
+        g <- graph.data.frame(edges, directed = F, vertices = nodes)
+        
+        nodes <- 
+            nodes %>% 
+            # mutate(group = edge.betweenness.community(g)$membership) %>% 
+            mutate(group = walktrap.community(g)$membership) %>% 
+            as.data.frame()
+        
+        edges <- 
+            edges %>% 
+            left_join(select(nodes, origin = label, origin_id = id), by = "origin") %>% 
+            left_join(select(nodes, target = label, target_id = id), by = "target") %>% 
+            mutate_at(vars(ends_with("_id")), ~ . - 1) %>% 
+            as.data.frame()
         
         
-        # Vertex appearance
-        vert_size  <- input$vert_size
-        vert_shape <- 
-            if(input$root_only == TRUE) {
-                c(input$vert_shape, rep("none", length(V(graph)) - 1))
-            } else {
-                input$vert_shape
-            }
-        vert_color <- "white"  # "lemonchiffon"
-        
-        # Vertex labels
-        label_font <- "sans"
-        label_size <- input$label_size
-        
-        # Edge appearance
-        edge_thick <- input$edge_thick
-        arrw_thick <- input$arrw_thick
-        edge_curve <- input$edge_curve
-        edge_shape <- input$edge_shape
-        
+        # Draw the graph
         
         par(
             oma = c(0, 0, 0, 2),  # Outer margin in lines of text
             cex.main = 2  # Magnification of title
         )
         
-        
-        plot(graph, 
-             # Vertices
-             vertex.size = vert_size,
-             vertex.shape = vert_shape,
-             vertex.color = vert_color,
-             
-             # Labels
-             vertex.label.family = label_font,
-             vertex.label.cex = label_size,
-             
-             # Edges
-             edge.width = edge_thick,
-             edge.arrow.size = arrw_thick,
-             edge.curved = edge_curve,
-             edge.lty = edge_shape,
-             
-             # Other
-             layout = graph_layout,
-             rescale = TRUE,
-             frame = TRUE,
-             main = input$title
+        forceNetwork(
+            Links = edges, Nodes = nodes,
+            Source = "origin_id", Target = "target_id",
+            NodeID = "label", 
+            linkWidth = input$edge_thick, linkDistance = input$node_dist,
+            Group = "group",
+            charge = -(input$node_dist * 15) - 100,
+            zoom = TRUE,
+            fontSize = input$label_size,
+            fontFamily = "sans-serif",
+            opacityNoHover = 1,
+            opacity = 1
         )
     }
     
     output$network <- 
-        renderPlot(plot_graph(input$user_edges))
-    
-    output$code <- 
-        renderText(mc_tribble(build_graph_df(input$user_edges)))
+        renderForceNetwork(plot_nd3(input$user_edges))
 }
 
 # Run the application 
